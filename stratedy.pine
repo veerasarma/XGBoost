@@ -1,0 +1,55 @@
+//@version=5
+strategy("📈 ORB + Volume Confirmation (15m)", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10)
+
+// === Inputs ===
+openingRangeEndTime = input.time(timestamp("2022-01-01 09:45 +0530"), title="Opening Range End Time (IST)")
+riskRewardRatio = input.float(2.0, title="Risk/Reward Ratio", step=0.1)
+volSmaLen = input.int(20, title="Volume SMA Length")
+
+// === Time Setup ===
+inOpeningRange = (time <= openingRangeEndTime)
+isNewDay = ta.change(time("D"))
+
+// === Store Opening Range High/Low ===
+var float sessionHigh = na
+var float sessionLow = na
+
+if (isNewDay)
+    sessionHigh := high
+    sessionLow := low
+else if (inOpeningRange)
+    sessionHigh := math.max(sessionHigh, high)
+    sessionLow := math.min(sessionLow, low)
+
+// === Volume Confirmation ===
+volSMA = ta.sma(volume, volSmaLen)
+volBreakout = volume > volSMA
+
+// === Breakout Conditions ===
+longBreak = close > sessionHigh and not inOpeningRange and volBreakout
+shortBreak = close < sessionLow and not inOpeningRange and volBreakout
+
+// === SL / TP Logic ===
+rangeSize = sessionHigh - sessionLow
+longSL = sessionLow
+longTP = close + (rangeSize * riskRewardRatio)
+
+shortSL = sessionHigh
+shortTP = close - (rangeSize * riskRewardRatio)
+
+// === Orders ===
+if (longBreak)
+    strategy.entry("Long ORB", strategy.long)
+    strategy.exit("Long TP/SL", from_entry="Long ORB", stop=longSL, limit=longTP)
+    alert("🚀 Long ORB Breakout Entry!", alert.freq_once_per_bar)
+
+if (shortBreak)
+    strategy.entry("Short ORB", strategy.short)
+    strategy.exit("Short TP/SL", from_entry="Short ORB", stop=shortSL, limit=shortTP)
+    alert("🔻 Short ORB Breakdown Entry!", alert.freq_once_per_bar)
+
+// === Plotting ===
+plot(inOpeningRange ? sessionHigh : na, title="Opening Range High", color=color.green, linewidth=1, style=plot.style_line)
+plot(inOpeningRange ? sessionLow : na, title="Opening Range Low", color=color.red, linewidth=1, style=plot.style_line)
+plotshape(longBreak, location=location.belowbar, color=color.green, style=shape.triangleup, size=size.small, title="Long Entry Marker")
+plotshape(shortBreak, location=location.abovebar, color=color.red, style=shape.triangledown, size=size.small, title="Short Entry Marker")
